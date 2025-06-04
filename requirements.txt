@@ -1,2 +1,7 @@
 streamlit
 openai
+llama-index
+chromadb
+docx2txt
+requests
+llama-index-vector-stores-chroma
