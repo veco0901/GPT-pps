@@ -1,56 +1,36 @@
 import streamlit as st
-from openai import OpenAI
+from llama_index.readers.file import PyMuPDFReader
+import os
 
-# Show title and description.
-st.title("💬 Chatbot")
-st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
-)
+# 페이지 기본 설정
+st.set_page_config(page_title="📄 PDF 업로드", layout="centered")
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
+st.title("📄 법령 PDF 문서 업로드 및 미리보기")
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+# 파일 업로드 받기
+uploaded_file = st.file_uploader("📂 PDF 파일을 업로드하세요", type=["pdf"])
 
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+if uploaded_file is not None:
+    # 파일 저장 위치 (임시 디렉토리)
+    os.makedirs("/tmp", exist_ok=True)
+    file_path = os.path.join("/tmp", uploaded_file.name)
 
-    # Display the existing chat messages via `st.chat_message`.
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    # 업로드된 PDF 파일 저장
+    with open(file_path, "wb") as f:
+        f.write(uploaded_file.read())
 
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
+    st.success("✅ PDF 업로드 및 저장 완료")
 
-        # Store and display the current prompt.
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+    # llama-index의 PyMuPDFReader로 문서 로드
+    reader = PyMuPDFReader()
+    documents = reader.load(file_path=file_path)
 
-        # Generate a response using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
-        )
+    # 첫 페이지 일부 출력
+    st.markdown("### 📄 첫 페이지 내용 미리보기:")
+    st.write(documents[0].text[:1000])  # 1000자까지 출력
 
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+    # 전체 페이지 수 출력
+    st.info(f"📃 총 {len(documents)} 페이지 문서를 불러왔습니다.")
+
+    # 세션에 저장해두기 (추후 벡터 인덱싱용)
+    st.session_state["uploaded_documents"] = documents
